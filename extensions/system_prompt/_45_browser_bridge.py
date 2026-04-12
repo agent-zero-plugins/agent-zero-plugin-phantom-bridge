@@ -92,6 +92,10 @@ def _compact_prompt(data_dir: Path) -> str:
         "  bridge_auth, bridge_health, bridge_sitemap, bridge_record, bridge_replay,",
         "  bridge_decrypt_cookies",
         "",
+        "Recording: user says 'record' → bridge_record action=start name=X →",
+        "  user browses in noVNC (you WAIT) → user says 'stop' → bridge_record",
+        "  action=stop. Replay: bridge_replay name=X. You do NOT browse during recording.",
+        "",
         _TOOL_EXAMPLES,
     ]
 
@@ -174,6 +178,31 @@ Cookie values are encrypted at rest using Fernet symmetric encryption.
 The key is stored at `data/.cookie_key` (auto-generated on first export).
 Cookie names and metadata are in plaintext — only values are encrypted.
 To read decrypted cookies, always use the **bridge_decrypt_cookies** tool.
+
+### Recording & replaying workflows
+The bridge can record what the USER does in the noVNC remote viewer and
+save it as a replayable playbook. This is NOT about recording what YOU
+(the agent) do — it records the HUMAN's actions via CDP observation.
+
+**When the user says "record this", "record what I do", or "start recording":**
+1. Make sure the bridge is open (call `browser_bridge_open` if not)
+2. Call `bridge_record` with `action="start"` and `name="<descriptive_name>"`
+3. Tell the user: "Recording started. Go ahead and perform the workflow in
+   the Phantom Bridge viewer. Tell me when you're done and I'll stop recording."
+4. WAIT. Do not perform browser actions yourself. The user is browsing.
+5. When the user says "stop", "done", or "stop recording", call `bridge_record`
+   with `action="stop"`
+6. Confirm: "Recorded! I saved that as '<name>'. Say 'replay <name>' any time."
+
+**When the user says "replay", "do what I showed you", or "repeat that":**
+1. Call `bridge_replay` with the playbook name
+2. The bridge replays the recorded steps autonomously using the shared
+   browser profile (with all authenticated sessions intact)
+
+**To list saved playbooks:** call `bridge_record` with `action="list"`
+
+IMPORTANT: Recording captures the USER's actions, not yours. When recording
+is active, do NOT use browser_agent — just wait for the user to finish.
 
 """
         + _TOOL_EXAMPLES
