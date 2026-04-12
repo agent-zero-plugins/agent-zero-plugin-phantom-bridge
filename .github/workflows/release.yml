@@ -1,0 +1,63 @@
+# Phantom Bridge — Release workflow
+#
+# Triggers on version tags (v*).
+# Computes install.sh SHA256 and attaches it to the GitHub Release notes
+# so users can verify the script before running it.
+#
+# This workflow complements docker-publish.yml (which builds and pushes the image).
+# Both fire on v* tags; they are independent and can run concurrently.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Publish release with install.sh SHA256
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create/update GitHub Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compute install.sh SHA256
+        id: sha
+        run: |
+          SHA=$(sha256sum install.sh | awk '{print $1}')
+          echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "install.sh SHA256: ${SHA}"
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Phantom Bridge ${{ github.ref_name }}
+
+            ### install.sh SHA256 (for verification)
+
+            ```
+            ${{ steps.sha.outputs.sha }}  install.sh
+            ```
+
+            Verify before running:
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/notabotchef/phantom-bridge/${{ github.ref_name }}/install.sh -o install.sh
+            echo "${{ steps.sha.outputs.sha }}  install.sh" | sha256sum --check
+            bash install.sh
+            ```
+
+            > **Prefer the Quick Start?** It's safer — no script needed:
+            > ```bash
+            > curl -O https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/docker-compose.override.yml
+            > docker compose up -d
+            > ```
+
+          files: |
+            install.sh
+            docker-compose.override.yml

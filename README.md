@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.4.0-purple.svg" alt="Version 1.4.0"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.4.1-purple.svg" alt="Version 1.4.1"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,13 @@
 
 ---
 
-## What's New in v1.4.0
+## What's New in v1.4.1
+
+- **One-liner installer** — `install.sh` with security warning, 5-second countdown, SHA256 verification, A0 dir auto-detection, Docker and manual modes, post-install `bridge_doctor` check. Shellcheck clean.
+- **Release workflow** — `.github/workflows/release.yml` publishes install.sh SHA256 to GitHub Release notes so users can verify before running.
+- README "Install via script" section placed after Quick Start with explicit security warning.
+
+### v1.4.0
 
 - **Prebuilt Docker image** — `ghcr.io/notabotchef/phantom-bridge:latest` has x11vnc, novnc, xvfb, xdotool, chromium, websockets, and cryptography pre-installed. No apt or pip steps.
 - **Smart entrypoint** — `docker-entrypoint-phantom.sh` detects whether you have a git-cloned plugin mounted and skips the baked copy if so. Your `git pull` workflow is preserved.
@@ -213,6 +219,39 @@ The prebuilt image (`ghcr.io/notabotchef/phantom-bridge:latest`) has all system 
 If you already have A0 running with a `git clone` of this plugin, the smart entrypoint detects your mounted directory and skips the baked copy — your `git pull` workflow is preserved.
 
 > **Different noVNC port?** Set `PHANTOM_NOVNC_PORT=6081` in your `.env` file before running `docker compose up -d`.
+
+---
+
+## Install via script (advanced, opt-in)
+
+> **Read the script before running.** Piping curl to bash runs code you haven't reviewed. Prefer the Quick Start above unless you have a specific reason.
+> Script source: [`install.sh`](install.sh) in this repo. Pinned SHA published per release.
+
+Two equivalent forms — the second lets you inspect before executing:
+
+```bash
+# Form 1: pipe directly (shows a 5-second countdown + Y/n confirm)
+bash <(curl -fsSL https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/install.sh)
+
+# Form 2: download, inspect, then run (recommended)
+curl -fsSL https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/install.sh -o install.sh
+less install.sh   # read it
+bash install.sh
+```
+
+Options:
+
+```bash
+bash install.sh --dry-run --yes       # preview what would happen, no changes
+bash install.sh --mode=manual         # git clone + execute.py instead of compose
+bash install.sh --path=/your/a0/dir  # override auto-detected A0 directory
+```
+
+Verify the script SHA before running (SHA is published in each [GitHub Release](https://github.com/notabotchef/phantom-bridge/releases)):
+
+```bash
+echo "<sha-from-release>  install.sh" | sha256sum --check
+```
 
 ---
 
