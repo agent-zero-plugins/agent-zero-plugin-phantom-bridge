@@ -37,6 +37,20 @@ def main():
 
         print("[OK] Installed x11vnc and noVNC (with websockify)")
 
+        # Verify binaries actually landed on PATH — apt can report success while
+        # the binary is absent (dpkg desync, PATH issue, partial install).
+        post_x11vnc = shutil.which("x11vnc")
+        post_websockify = shutil.which("websockify")
+        if not post_x11vnc or not post_websockify:
+            missing_after = [b for b, found in [("x11vnc", post_x11vnc), ("websockify", post_websockify)] if not found]
+            print(
+                f"[ERROR] apt reported success but these binaries are not on PATH: "
+                f"{', '.join(missing_after)}\n"
+                "Check apt-get output above for silent errors. "
+                "Try: apt-get install -y --fix-broken"
+            )
+            return 1
+
     # Install Python dependency
     try:
         import websockets  # noqa: F401

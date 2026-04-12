@@ -15,12 +15,113 @@ import logging
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import time
+import urllib.error
+import urllib.request
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("browser_bridge")
+
+
+# ---------------------------------------------------------------------------
+# Health probe — standalone helper usable without an A0 context
+# ---------------------------------------------------------------------------
+
+
+class HealthState(str, Enum):
+    HEALTHY = "healthy"
+    BRIDGE_DOWN = "bridge_down"
+    NOVNC_UNREACHABLE = "novnc_unreachable"
+    PORT_UNMAPPED = "port_unmapped"
+    DEPS_MISSING = "deps_missing"
+
+
+def probe_novnc(
+    host: str = "localhost",
+    port: int = 6080,
+    timeout: float = 2.0,
+) -> dict[str, Any]:
+    """Probe a noVNC/websockify endpoint and classify its state.
+
+    Two-phase check: raw TCP connect first, then HTTP GET /vnc.html.
+    A refused TCP connect points at docker-compose port mapping;
+    a successful connect + HTTP failure points at noVNC not installed.
+
+    Returns a dict shaped as:
+        {
+            "state": HealthState,
+            "detail": str,   # human-readable probe result
+            "fix":    str,   # copy-pasteable remediation
+        }
+
+    Total wall-clock time is bounded by ``timeout`` — tool callers rely on
+    this to keep responses interactive. Stdlib only (no ``requests`` dep).
+    """
+    connect_budget = max(0.2, timeout / 2)
+    http_budget = max(0.2, timeout - connect_budget)
+
+    # Phase 1: raw TCP — distinguishes "port not mapped" from "app broken"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(connect_budget)
+    try:
+        sock.connect((host, port))
+    except (ConnectionRefusedError, OSError) as e:
+        return {
+            "state": HealthState.PORT_UNMAPPED,
+            "detail": f"TCP connect to {host}:{port} failed: {e}",
+            "fix": (
+                f"noVNC port {port} is not reachable. Add "
+                f'`"{port}:{port}"` to your docker-compose.yml ports, '
+                "then `docker compose up -d`."
+            ),
+        }
+    finally:
+        try:
+            sock.close()
+        except OSError:
+            pass
+
+    # Phase 2: HTTP GET /vnc.html — confirms websockify + novnc static files
+    url = f"http://{host}:{port}/vnc.html"
+    try:
+        with urllib.request.urlopen(url, timeout=http_budget) as resp:
+            if 200 <= resp.status < 300:
+                return {
+                    "state": HealthState.HEALTHY,
+                    "detail": f"{url} → HTTP {resp.status}",
+                    "fix": "",
+                }
+            return {
+                "state": HealthState.NOVNC_UNREACHABLE,
+                "detail": f"{url} → HTTP {resp.status}",
+                "fix": (
+                    "Websockify answered but noVNC static files are missing. "
+                    "Reinstall: `apt-get install --reinstall novnc` inside the container."
+                ),
+            }
+    except urllib.error.HTTPError as e:
+        return {
+            "state": HealthState.NOVNC_UNREACHABLE,
+            "detail": f"{url} → HTTP {e.code}",
+            "fix": (
+                "Port is open but noVNC is not serving vnc.html. "
+                "Install novnc: `apt-get install -y novnc`."
+            ),
+        }
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        return {
+            "state": HealthState.NOVNC_UNREACHABLE,
+            "detail": f"{url} → {e}",
+            "fix": (
+                "TCP connected but HTTP failed — websockify likely crashed. "
+                "Run `bridge_doctor` or restart the bridge."
+            ),
+        }
+
 
 # ---------------------------------------------------------------------------
 # Singleton state — one bridge per container
