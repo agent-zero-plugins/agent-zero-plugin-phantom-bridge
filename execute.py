@@ -101,20 +101,57 @@ def main():
             print("Manual fix: python3 -m pip install --break-system-packages " + " ".join(needed))
             return 1
 
+    # Check if port 6080 is already exposed (noVNC viewer)
+    port_exposed = False
+    try:
+        import socket as _sock
+        s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+        s.settimeout(1)
+        s.bind(("0.0.0.0", 6080))
+        s.close()
+    except OSError:
+        port_exposed = True
+
     print()
-    print("-" * 50)
-    print("  Setup complete!")
-    print("-" * 50)
+    print("=" * 60)
+    print("  Phantom Bridge — Setup complete!")
+    print("=" * 60)
     print()
-    print("  Make sure port 6080 is exposed in docker-compose.yml:")
+
+    if port_exposed:
+        print("  [OK] Port 6080 is already in use (noVNC likely running).")
+        print("  Open A0's sidebar > Phantom Bridge to start browsing.")
+    else:
+        print("  [ACTION REQUIRED] Port 6080 is not exposed yet.")
+        print()
+        print("  The remote browser viewer needs port 6080 mapped from")
+        print("  the container to your host. This requires restarting")
+        print("  the container from your HOST terminal (not from A0).")
+        print()
+        print("  Open a terminal on your computer and run:")
+        print()
+        print("    docker stop agent-zero")
+        print("    docker rm agent-zero")
+        print("    docker run -d --name agent-zero \\")
+        print('      -p 5080:80 -p 6080:6080 \\')
+        print('      -v "$(pwd)/agent-zero/usr:/a0/usr" \\')
+        print("      agent0ai/agent-zero:latest")
+        print()
+        print("  Adjust the -v path to match where your A0 data lives.")
+        print("  The -p 5080:80 keeps your current A0 UI port.")
+        print("  The -p 6080:6080 exposes the Phantom Bridge viewer.")
+        print()
+        print("  If you use docker-compose instead, add this to your")
+        print("  docker-compose.yml ports section:")
+        print()
+        print('    ports:')
+        print('      - "6080:6080"    # Phantom Bridge viewer')
+        print()
+        print("  Then: docker compose up -d")
+
     print()
-    print('    ports:')
-    print('      - "5050:5000"')
-    print('      - "6080:6080"    # Phantom Bridge viewer')
-    print()
-    print("  Then restart: docker compose up -d")
-    print()
-    print("  Open A0's sidebar > Phantom Bridge to start browsing.")
+    print("  After the port is exposed, open A0's sidebar and click")
+    print("  the Phantom Bridge icon, or tell A0: 'open the browser bridge'")
     print()
     return 0
 
