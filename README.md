@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.3.0-purple.svg" alt="Version 1.3.0"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.4.0-purple.svg" alt="Version 1.4.0"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,15 @@
 
 ---
 
-## What's New in v1.3.0
+## What's New in v1.4.0
+
+- **Prebuilt Docker image** — `ghcr.io/notabotchef/phantom-bridge:latest` has x11vnc, novnc, xvfb, xdotool, chromium, websockets, and cryptography pre-installed. No apt or pip steps.
+- **Smart entrypoint** — `docker-entrypoint-phantom.sh` detects whether you have a git-cloned plugin mounted and skips the baked copy if so. Your `git pull` workflow is preserved.
+- **Drop-in compose override** — `docker-compose.override.yml` drops next to your existing compose file and auto-merges. No edits to your original file needed.
+- **GitHub Actions publish pipeline** — `.github/workflows/docker-publish.yml` builds multi-arch (amd64 + arm64) on tag push and publishes to ghcr.io with `packages: write`.
+- **Quick Start section** — README now leads with the 3-command Docker path, with the manual install preserved below as a fallback.
+
+### v1.3.0
 
 - **Diagnostics & pre-flight** — `bridge_doctor` tool runs 5 health checks (noVNC port, system binaries, DISPLAY env, cookie key, Python deps) and prints copy-paste fix commands for every failure.
 - **Pre-flight in `bridge_open`** — After the bridge starts, `probe_novnc` checks the noVNC endpoint and prepends an actionable hint to the response if the viewer is unreachable — no more silent blank screens.
@@ -186,13 +194,37 @@ The `_30_browser_bridge_profile.py` extension runs at `message_loop_start` and p
 
 ---
 
-## Setup
+## Quick Start (Docker — recommended)
+
+The fastest path: one file download, one command, done. No apt, no pip, no execute.py.
+
+```bash
+# 1. Download the drop-in compose override
+curl -O https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/docker-compose.override.yml
+
+# 2. Start (or restart) your A0 stack — Compose auto-merges the override
+docker compose up -d
+
+# 3. Open A0 in your browser
+open http://localhost:5050   # then click the Phantom Bridge icon in the sidebar
+```
+
+The prebuilt image (`ghcr.io/notabotchef/phantom-bridge:latest`) has all system dependencies pre-installed.
+If you already have A0 running with a `git clone` of this plugin, the smart entrypoint detects your mounted directory and skips the baked copy — your `git pull` workflow is preserved.
+
+> **Different noVNC port?** Set `PHANTOM_NOVNC_PORT=6081` in your `.env` file before running `docker compose up -d`.
+
+---
+
+## Manual Install
+
+The traditional install path — use this if you prefer full control, already have a custom A0 setup, or cannot use Docker Compose overrides.
 
 ### 1. Install the plugin
 
 ```bash
 # Clone into A0's plugin directory
-git clone https://github.com/Nunezchef/phantom-bridge.git /path/to/a0/usr/plugins/phantom_bridge
+git clone https://github.com/notabotchef/phantom-bridge.git /path/to/a0/usr/plugins/phantom_bridge
 
 # Or copy if you already have the files
 cp -r phantom_bridge /path/to/a0/usr/plugins/
@@ -418,5 +450,5 @@ MIT
 ---
 
 <p align="center">
-  <sub>Built for <a href="https://github.com/frdel/agent-zero">Agent Zero</a> by <a href="https://github.com/Nunezchef">@Nunezchef</a></sub>
+  <sub>Built for <a href="https://github.com/frdel/agent-zero">Agent Zero</a> by <a href="https://github.com/notabotchef">@notabotchef</a></sub>
 </p>
