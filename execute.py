@@ -97,8 +97,9 @@ def main():
         if result.returncode == 0:
             print(f"[OK] Installed Python deps: {', '.join(needed)}")
         else:
-            print(f"[WARN] pip install failed: {result.stderr[:300]}")
+            print(f"[ERROR] pip install failed: {result.stderr[:300]}")
             print("Manual fix: python3 -m pip install --break-system-packages " + " ".join(needed))
+            return 1
 
     print()
     print("-" * 50)
