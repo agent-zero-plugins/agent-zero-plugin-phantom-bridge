@@ -42,6 +42,8 @@ class BridgeHandler(ApiHandler):
             return await self._record_stop()
         elif action == "replay":
             return await self._replay(input)
+        elif action == "delete_playbook":
+            return self._delete_playbook(input)
         elif action == "cookies":
             return self._get_cookies()
         elif action == "export_cookies":
@@ -153,6 +155,21 @@ class BridgeHandler(ApiHandler):
                 except Exception:
                     pass
         return {"ok": True, "playbooks": result}
+
+    def _delete_playbook(self, input: dict) -> dict:
+        from usr.plugins.phantom_bridge.data_paths import get_playbooks_dir
+
+        name = input.get("name", "").strip()
+        if not name:
+            return {"ok": False, "error": "Missing playbook name"}
+
+        playbooks_dir = get_playbooks_dir()
+        target = playbooks_dir / f"{name}.json"
+        if not target.exists():
+            return {"ok": False, "error": f"Playbook '{name}' not found"}
+
+        target.unlink()
+        return {"ok": True, "deleted": name}
 
     def _get_cookies(self) -> dict:
         """Return cookie counts per domain from encrypted per-domain files."""
