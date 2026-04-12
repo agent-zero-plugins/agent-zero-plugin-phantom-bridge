@@ -313,6 +313,19 @@ class CDPClient:
                             "cdp_client: re-enabled domain %s", domain
                         )
                         break
+                    # Route replies for other in-flight commands to their futures
+                    if "id" in resp:
+                        other_id = resp["id"]
+                        fut = self._pending.pop(other_id, None)
+                        if fut and not fut.done():
+                            if "error" in resp:
+                                fut.set_exception(
+                                    RuntimeError(
+                                        f"CDP error: {resp['error'].get('message', resp['error'])}"
+                                    )
+                                )
+                            else:
+                                fut.set_result(resp.get("result", {}))
                     # Dispatch any events received while waiting
                     if "method" in resp:
                         event_name = resp["method"]

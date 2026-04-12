@@ -158,18 +158,29 @@ class BridgeHandler(ApiHandler):
 
     def _delete_playbook(self, input: dict) -> dict:
         from usr.plugins.phantom_bridge.data_paths import get_playbooks_dir
+        import re
 
         name = input.get("name", "").strip()
         if not name:
             return {"ok": False, "error": "Missing playbook name"}
 
+        # Sanitize: strip path separators and traversal sequences
+        safe_name = re.sub(r'[/\\]', '', name).replace('..', '')
+        if not safe_name or safe_name != name:
+            return {"ok": False, "error": "Invalid playbook name"}
+
         playbooks_dir = get_playbooks_dir()
-        target = playbooks_dir / f"{name}.json"
+        target = (playbooks_dir / f"{safe_name}.json").resolve()
+
+        # Ensure resolved path is inside playbooks_dir
+        if not str(target).startswith(str(playbooks_dir.resolve())):
+            return {"ok": False, "error": "Invalid playbook name"}
+
         if not target.exists():
-            return {"ok": False, "error": f"Playbook '{name}' not found"}
+            return {"ok": False, "error": f"Playbook '{safe_name}' not found"}
 
         target.unlink()
-        return {"ok": True, "deleted": name}
+        return {"ok": True, "deleted": safe_name}
 
     def _get_cookies(self) -> dict:
         """Return cookie counts per domain from encrypted per-domain files."""
