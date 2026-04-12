@@ -41,27 +41,7 @@
 - **State-aware WebUI** — The sidebar panel shows an amber/red banner with the exact fix hint when `health_state != healthy`.
 - **Verified `execute.py`** — After `apt-get install`, the installer now re-checks that `x11vnc` and `websockify` actually landed on PATH and exits 1 with a clear error if they didn't.
 
-### v1.2.1
-
-- **Centralized data path resolution** — All persistent data paths (cookies, playbooks, sitemaps, auth registry, profile) now resolve through a single `data_paths.py` module. Supports `PHANTOM_BRIDGE_DATA_DIR` environment variable to relocate the entire data tree (e.g., to a mounted volume).
-
-### v1.2.0
-
-- **Robust playbook replay** — Recorded playbooks now capture multiple locator strategies per step (CSS selector, visible text, ARIA role, aria-label, placeholder, label text, input type). During replay, if an exact selector breaks (dynamic class names, hashed IDs, SPA re-renders), the engine falls back through alternative strategies automatically.
-- **Agent-guided instructions** — New `Playbook.to_agent_instructions()` generates natural-language workflow descriptions with prioritized locator hints, letting A0 reason about element location instead of blindly executing brittle scripts.
-- **Recording UI** — Start and stop playbook recordings directly from the sidebar panel with real-time notifications and an A0 progress bar.
-
-### v1.1.1
-
-- **WebSocket push events** — Bridge status and auth events are pushed to the UI in real time. No more 5-second polling.
-- **Self-correction error messages** — All tool error paths now include canonical JSON call examples so A0 v1.5 agents can fix malformed calls automatically.
-- **Small-model prompt** — Compact ~200-token system prompt variant for models with ≤ 8192 context window, preserving their token budget.
-- **Unicode sanitization** — Page titles and DOM events are sanitized before storage so lone surrogates from malformed web pages never crash JSON serialization.
-- **Cache-Control: no-store** — Bridge API responses opt out of A0 v1.5's new API caching so status and cookie data are always live.
-- **Task lifecycle safety** — `ObserverManager.start()` is idempotent; `stop()` cancels and awaits all background tasks.
-- **Review fixes** — Cookie files are now flushed to disk when a new login is detected (not just on poll), and a failed CDP connect no longer permanently blocks retries.
-
-**v1.1.0** — Cookies encrypted at rest (Fernet), per-domain cookie files, `bridge_decrypt_cookies` tool.
+> Older versions (v1.2.x and earlier) → see the [full changelog on GitHub Releases](https://github.com/notabotchef/phantom-bridge/releases).
 
 ---
 
