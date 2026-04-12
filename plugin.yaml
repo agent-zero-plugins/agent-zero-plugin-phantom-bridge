@@ -5,7 +5,7 @@ description: >
   viewer (noVNC) so you can authenticate from your own browser. A0 inherits
   those sessions, learns site patterns, and can replay recorded workflows
   autonomously.
-version: 1.4.3
+version: 1.4.3.1
 settings_sections:
   - external
   - playbooks

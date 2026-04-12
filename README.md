@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.4.3-purple.svg" alt="Version 1.4.3"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.4.3.1-purple.svg" alt="Version 1.4.3.1"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,16 @@
 
 ---
 
-## What's New in v1.4.3
+## What's New in v1.4.3.1
+
+- **Playbook recorder fixed** — the CDP observer was losing event subscriptions after WebSocket reconnects (Chrome drops domain registrations when the connection resets). Now tracks enabled domains and re-enables them automatically. Also re-registers the `__phantomBridge` CDP binding after navigation context destruction.
+- **Play/Delete buttons in sidebar** — each saved playbook now has a ▶ Play button (triggers autonomous replay) and a ✕ Delete button (with confirmation) directly in the Phantom Bridge sidebar panel.
+- **Replay toolbar in noVNC popup** — collapsible "Playbooks" overlay in the remote browser viewer window so you can trigger replays without switching back to the sidebar.
+- **Recording instructions in system prompt** — A0 now understands the record/replay flow: when you say "record this", it calls `bridge_record` and waits while you browse in noVNC, instead of trying to browse itself.
+- **Path traversal fix** — `delete_playbook` API now sanitizes names and verifies resolved paths stay inside `data/playbooks/`.
+- **Install from inside A0** — README now has a 2-command section for when A0 installs the plugin itself (no Docker needed from inside the container).
+
+### v1.4.3
 
 - **Reverts to the canonical Agent Zero plugin install pattern.** v1.4.0–v1.4.2 tried to ship a prebuilt Docker image (`ghcr.io/notabotchef/phantom-bridge`) but the image was built FROM `frdel/agent-zero-run:latest`, an outdated base — the current A0 base is `agent0ai/agent-zero-base:latest`. The build pipeline never produced a working image; users following v1.4.0/v1.4.1/v1.4.2 instructions hit `pull access denied` or a stale image.
 - **New Quick Start (3 commands)** — clones the plugin into `./a0-data/usr/plugins/phantom_bridge`, drops in the compose override (port 6080 + plugin volume mount), and restarts. Then click **Execute** on the Phantom Bridge entry in A0's Plugins UI to run `execute.py`. This is the standard A0 plugin install path that has worked for the entire 1.x line.
