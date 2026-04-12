@@ -51,20 +51,54 @@ def main():
             )
             return 1
 
-    # Install Python dependency
+    # Install Python dependencies
+    # Check what's already importable, install only what's missing.
+    needed = []
     try:
         import websockets  # noqa: F401
         print("[OK] websockets already installed.")
     except ImportError:
+        needed.append("websockets>=13.1,<17.0")
+
+    try:
+        import cryptography  # noqa: F401
+        print("[OK] cryptography already installed.")
+    except ImportError:
+        needed.append("cryptography>=42.0")
+
+    if needed:
+        # Make sure pip exists in the same Python that runs this script.
+        # Some A0 base images ship python3 without the pip module bundled.
+        try:
+            import pip  # noqa: F401
+        except ImportError:
+            print("[INFO] pip module missing — bootstrapping via apt...")
+            apt_result = subprocess.run(
+                ["apt-get", "install", "-y", "--no-install-recommends", "python3-pip"],
+                text=True,
+                capture_output=True,
+            )
+            if apt_result.returncode != 0:
+                print(f"[ERROR] Could not install python3-pip: {apt_result.stderr[:200]}")
+                print("Manual fix: apt-get install -y python3-pip")
+                return 1
+
+        # Use --break-system-packages for PEP 668 (Debian Bookworm+).
+        # Use --ignore-installed to avoid fighting with apt-managed packages.
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "websockets>=12.0,<14.0"],
+            [
+                sys.executable, "-m", "pip", "install",
+                "--break-system-packages", "--ignore-installed", "--no-cache-dir",
+                *needed,
+            ],
             text=True,
             capture_output=True,
         )
         if result.returncode == 0:
-            print("[OK] Installed websockets (Python)")
+            print(f"[OK] Installed Python deps: {', '.join(needed)}")
         else:
-            print(f"[WARN] pip install websockets failed: {result.stderr[:100]}")
+            print(f"[WARN] pip install failed: {result.stderr[:300]}")
+            print("Manual fix: python3 -m pip install --break-system-packages " + " ".join(needed))
 
     print()
     print("-" * 50)
