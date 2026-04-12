@@ -1,0 +1,29 @@
+# Phantom Bridge — docker-compose.override.yml
+#
+# DROP-IN: Copy this file next to your existing docker-compose.yml.
+# Docker Compose auto-merges override files — no edits to your original file needed.
+#
+# What this does:
+#   - Switches the agent-zero service to the Phantom Bridge prebuilt image
+#     (has x11vnc, novnc, xvfb, chromium pre-installed — no apt/execute.py needed)
+#   - Exposes port 6080 for the noVNC remote browser viewer
+#   - Mounts your local plugin directory so git pull updates work immediately
+#
+# Usage:
+#   curl -O https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/docker-compose.override.yml
+#   docker compose up -d
+#
+# To use a different noVNC port (e.g. if 6080 is taken on your host):
+#   PHANTOM_NOVNC_PORT=6081 docker compose up -d
+# Or set it permanently in a .env file:
+#   echo "PHANTOM_NOVNC_PORT=6081" >> .env
+
+services:
+  agent-zero:
+    image: ghcr.io/notabotchef/phantom-bridge:latest
+    ports:
+      - "${PHANTOM_NOVNC_PORT:-6080}:6080"
+    volumes:
+      # Mount plugin directory — smart entrypoint detects this and skips baked copy,
+      # so git pull in this directory immediately takes effect on next container start.
+      - ./a0-data/usr/plugins/phantom_bridge:/a0/usr/plugins/phantom_bridge

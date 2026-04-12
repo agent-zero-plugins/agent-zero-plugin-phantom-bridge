@@ -1,0 +1,91 @@
+# Phantom Bridge — Docker image build and publish to ghcr.io
+#
+# Triggers:
+#   - Push a version tag (v*) to publish a release image
+#   - Push to main to publish a rolling :latest
+#   - Pull requests to validate the build without pushing
+#
+# Published images:
+#   ghcr.io/notabotchef/phantom-bridge:latest
+#   ghcr.io/notabotchef/phantom-bridge:<tag>   (on v* tag push)
+#
+# Multi-arch: amd64 + arm64 for Apple Silicon (M1/M2/M3) users.
+
+name: Build and Publish Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: notabotchef/phantom-bridge
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (required for multi-arch builds)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag with the full version on v* tag push
+            type=semver,pattern={{version}}
+            # Tag with major.minor on v* tag push
+            type=semver,pattern={{major}}.{{minor}}
+            # Always tag :latest on main branch push
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Tag PRs as pr-<number> (no push)
+            type=ref,event=pr
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Use GitHub Actions cache to speed up repeated builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify image was published (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "Image published:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo ""
+          echo "To pull and verify:"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          echo "  docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} /usr/local/bin/docker-entrypoint-phantom.sh --version 2>&1 || true"

@@ -1,0 +1,26 @@
+# Phantom Bridge — .dockerignore
+#
+# CRITICAL: data/ must never be baked into the image.
+# It contains user state: cookies (encrypted), Chromium profile, playbooks, Fernet key.
+# The entrypoint creates the data/ directory structure at container start.
+data/
+
+# Development and CI artifacts
+.git/
+.github/
+.rune/
+.claude/
+.worktrees/
+*.pyc
+__pycache__/
+.pytest_cache/
+tests/
+*.egg-info/
+
+# Docs and project-level files that don't belong in the plugin
+docs/
+*.md
+LICENSE
+
+# Compose files — runtime config, not part of the plugin code
+docker-compose*.yml
