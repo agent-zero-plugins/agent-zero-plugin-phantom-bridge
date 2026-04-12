@@ -212,6 +212,20 @@ Then open A0 at <http://localhost:5050>, go to **Plugins**, find **Phantom Bridg
 
 > **Updating?** `git pull` inside `./a0-data/usr/plugins/phantom_bridge` and restart A0. The volume mount means new code is picked up immediately.
 
+### Installing from inside A0 (if A0 is doing the install itself)
+
+If you ask A0 to install this plugin, it runs commands **inside** the container where `docker` is not available. Skip the compose steps — the plugin loads automatically once cloned into the right path:
+
+```bash
+# 1. Clone the plugin
+git clone https://github.com/notabotchef/phantom-bridge.git /a0/usr/plugins/phantom_bridge
+
+# 2. Install system dependencies (x11vnc, novnc, xvfb, chromium, Python deps)
+python /a0/usr/plugins/phantom_bridge/execute.py
+```
+
+That's it. A0 hot-loads the plugin on clone — profile sharing is wired immediately. The `execute.py` step installs the display stack so the remote browser viewer works. Port 6080 must still be exposed in your `docker-compose.yml` on the **host side** for the noVNC viewer to be accessible from your browser.
+
 ---
 
 ## Install via script (advanced, opt-in)

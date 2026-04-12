@@ -61,6 +61,70 @@
             text-align: center; background: #151515; border-top: 1px solid #2a2a2a;
         }
         .upgrade-bar a { color: #a5b4fc; text-decoration: none; }
+
+        /* Replay toolbar */
+        .replay-toolbar {
+            position: fixed; top: 56px; right: 16px; z-index: 100;
+            width: 260px; max-height: calc(100vh - 80px);
+            background: #1a1a1aee; border: 1px solid #2a2a2a;
+            border-radius: 10px; backdrop-filter: blur(12px);
+            font-size: 0.85em; overflow: hidden;
+            display: flex; flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .replay-toolbar.collapsed {
+            width: auto; max-height: none;
+        }
+        .replay-toggle {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; cursor: pointer;
+            border-bottom: 1px solid #2a2a2a;
+            user-select: none;
+        }
+        .replay-toggle:hover { background: #ffffff08; }
+        .replay-toggle .arrow {
+            margin-left: auto; font-size: 0.7em; opacity: 0.4;
+            transition: transform 0.2s;
+        }
+        .replay-toggle .arrow.open { transform: rotate(180deg); }
+        .replay-body {
+            overflow-y: auto; padding: 8px 0;
+            max-height: 320px;
+        }
+        .replay-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px; cursor: default;
+        }
+        .replay-item:hover { background: #ffffff06; }
+        .replay-item-info { flex: 1; min-width: 0; }
+        .replay-item-name {
+            font-weight: 600; font-size: 0.9em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .replay-item-meta {
+            font-size: 0.75em; opacity: 0.4;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .replay-btn {
+            flex-shrink: 0; padding: 4px 12px;
+            background: #6366f122; border: 1px solid #6366f144;
+            color: #a5b4fc; border-radius: 6px; cursor: pointer;
+            font-size: 0.8em; font-weight: 600;
+            transition: background 0.15s;
+        }
+        .replay-btn:hover { background: #6366f133; }
+        .replay-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .replay-btn.running {
+            background: #22c55e22; border-color: #22c55e44; color: #22c55e;
+        }
+        .replay-btn.error {
+            background: #ef444422; border-color: #ef444444; color: #ef4444;
+        }
+        .replay-empty {
+            padding: 16px 14px; font-size: 0.8em; opacity: 0.3;
+            font-style: italic; text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -114,6 +178,43 @@
             </div>
         </template>
 
+        <!-- Replay toolbar overlay -->
+        <template x-if="connected">
+            <div class="replay-toolbar" :class="{ collapsed: !replayOpen }">
+                <div class="replay-toggle" @click="replayOpen = !replayOpen">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span style="font-weight:600;">Playbooks</span>
+                    <template x-if="playbooks.length > 0">
+                        <span style="font-size:0.75em; opacity:0.4;" x-text="'(' + playbooks.length + ')'"></span>
+                    </template>
+                    <span class="arrow" :class="{ open: replayOpen }">&#9660;</span>
+                </div>
+                <template x-if="replayOpen">
+                    <div class="replay-body">
+                        <template x-if="playbooks.length === 0">
+                            <div class="replay-empty">No saved playbooks yet.</div>
+                        </template>
+                        <template x-for="pb in playbooks" :key="pb.name">
+                            <div class="replay-item">
+                                <div class="replay-item-info">
+                                    <div class="replay-item-name" x-text="pb.name"></div>
+                                    <div class="replay-item-meta" x-text="pb.domain + ' — ' + pb.steps + ' steps'"></div>
+                                </div>
+                                <button class="replay-btn"
+                                        :class="{ running: replayStatus[pb.name] === 'running', error: replayStatus[pb.name] === 'error' }"
+                                        :disabled="replayStatus[pb.name] === 'running'"
+                                        @click="triggerReplay(pb.name)"
+                                        x-text="replayLabel(pb.name)">
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
     </div>
 
     <script type="module">
@@ -126,6 +227,9 @@
                 vncUrl: '',
                 kbActive: false,
                 _pollId: null,
+                replayOpen: false,
+                playbooks: [],
+                replayStatus: {},  // { name: 'idle' | 'running' | 'done' | 'error' }
 
                 async init() {
                     // Step 1: Check bridge status
@@ -135,6 +239,9 @@
                         await callJsonApi("plugins/phantom_bridge/bridge", { action: "start" });
                         await new Promise(r => setTimeout(r, 2500));
                     }
+
+                    // Fetch playbooks
+                    this.fetchPlaybooks();
 
                     // Step 2: Try noVNC first (requires port 6080 exposed)
                     const novncPort = status.novnc_port || 6080;
@@ -212,6 +319,45 @@
                             meta: event.metaKey, shift: event.shiftKey,
                         },
                     });
+                },
+
+                async fetchPlaybooks() {
+                    try {
+                        const data = await callJsonApi("plugins/phantom_bridge/bridge", { action: "playbooks" });
+                        this.playbooks = data.playbooks || [];
+                    } catch (e) {}
+                },
+
+                replayLabel(name) {
+                    const s = this.replayStatus[name];
+                    if (s === 'running') return 'Running...';
+                    if (s === 'done') return 'Done';
+                    if (s === 'error') return 'Error';
+                    return 'Replay';
+                },
+
+                async triggerReplay(name) {
+                    this.replayStatus[name] = 'running';
+                    try {
+                        const result = await callJsonApi("plugins/phantom_bridge/bridge", {
+                            action: "replay", name
+                        });
+                        if (result.ok) {
+                            // Replay started in background — mark done after estimated time
+                            const steps = result.steps || 1;
+                            const estimateMs = Math.max(steps * 2000, 3000);
+                            setTimeout(() => {
+                                this.replayStatus[name] = 'done';
+                                setTimeout(() => { this.replayStatus[name] = null; }, 4000);
+                            }, estimateMs);
+                        } else {
+                            this.replayStatus[name] = 'error';
+                            setTimeout(() => { this.replayStatus[name] = null; }, 4000);
+                        }
+                    } catch (e) {
+                        this.replayStatus[name] = 'error';
+                        setTimeout(() => { this.replayStatus[name] = null; }, 4000);
+                    }
                 },
 
                 destroy() {

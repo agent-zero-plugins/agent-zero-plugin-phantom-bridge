@@ -38,6 +38,8 @@ class CDPClient:
         self._ws_url: str | None = None
         self._listen_task: asyncio.Task | None = None
         self._shutdown = False
+        self._enabled_domains: set[str] = set()
+        self._needs_reenable: bool = False
 
     # ------------------------------------------------------------------
     # Connection
@@ -49,10 +51,16 @@ class CDPClient:
         1. GET http://127.0.0.1:{port}/json to list debuggable pages
         2. Pick the first 'page' type target
         3. Connect to its webSocketDebuggerUrl
+        4. Start the background listener task
         """
         self._shutdown = False
         self._ws_url = await self._discover_ws_url()
         await self._connect_ws()
+        # Start the background listener so event dispatch and command
+        # responses are processed.  Store the task so disconnect() can
+        # cancel it cleanly.
+        if self._listen_task is None or self._listen_task.done():
+            self._listen_task = asyncio.create_task(self._listen())
 
     async def _discover_ws_url(self) -> str:
         """Discover the WebSocket URL with retry + backoff."""
@@ -186,10 +194,12 @@ class CDPClient:
     async def enable_domains(self, *domains: str) -> None:
         """Enable CDP domains (Page, Network, Runtime, etc.).
 
-        Calls {domain}.enable for each.
+        Calls {domain}.enable for each.  Remembers which domains are active
+        so they can be re-enabled after a reconnect.
         """
         for domain in domains:
             await self.send(f"{domain}.enable")
+            self._enabled_domains.add(domain)
             logger.debug("cdp_client: enabled domain %s", domain)
 
     # ------------------------------------------------------------------
@@ -212,6 +222,15 @@ class CDPClient:
         """
         while not self._shutdown:
             try:
+                # After a reconnect, re-enable domains so Chrome resumes
+                # sending events.  This must happen inside _listen (not
+                # _reconnect) because send() awaits futures that only
+                # _receive_loop can fulfill — and _receive_loop hasn't
+                # restarted yet during _reconnect.  We launch a brief
+                # concurrent reader so the enable responses are handled.
+                if self._needs_reenable and self._ws and self._connected:
+                    self._needs_reenable = False
+                    await self._reenable_domains()
                 await self._receive_loop()
             except asyncio.CancelledError:
                 break
@@ -265,6 +284,64 @@ class CDPClient:
                             "cdp_client: error in subscriber for %s", event_name
                         )
 
+    async def _reenable_domains(self) -> None:
+        """Re-enable previously active CDP domains after a reconnect.
+
+        Sends {domain}.enable commands and reads responses inline (the
+        normal _receive_loop hasn't started yet at this point).  Uses
+        ws.recv() directly to avoid iterator issues with ``async for``.
+        """
+        if not self._ws or not self._enabled_domains:
+            return
+        for domain in list(self._enabled_domains):
+            self._msg_id += 1
+            msg_id = self._msg_id
+            msg = json.dumps({"id": msg_id, "method": f"{domain}.enable"})
+            try:
+                await self._ws.send(msg)
+                # Read messages until we see the response.  Any CDP
+                # events that arrive in the meantime are dispatched so
+                # they are not lost.
+                for _ in range(200):  # safety cap
+                    raw = await asyncio.wait_for(self._ws.recv(), timeout=10)
+                    try:
+                        resp = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if resp.get("id") == msg_id:
+                        logger.debug(
+                            "cdp_client: re-enabled domain %s", domain
+                        )
+                        break
+                    # Route replies for other in-flight commands to their futures
+                    if "id" in resp:
+                        other_id = resp["id"]
+                        fut = self._pending.pop(other_id, None)
+                        if fut and not fut.done():
+                            if "error" in resp:
+                                fut.set_exception(
+                                    RuntimeError(
+                                        f"CDP error: {resp['error'].get('message', resp['error'])}"
+                                    )
+                                )
+                            else:
+                                fut.set_result(resp.get("result", {}))
+                    # Dispatch any events received while waiting
+                    if "method" in resp:
+                        event_name = resp["method"]
+                        params = resp.get("params", {})
+                        for cb in self._subscribers.get(event_name, []):
+                            try:
+                                result = cb(params)
+                                if asyncio.iscoroutine(result):
+                                    await result
+                            except Exception:
+                                pass
+            except Exception as exc:
+                logger.warning(
+                    "cdp_client: failed to re-enable %s: %s", domain, exc
+                )
+
     async def _reconnect(self) -> None:
         """Attempt to reconnect to the WebSocket with backoff."""
         backoff = _INITIAL_BACKOFF
@@ -280,8 +357,12 @@ class CDPClient:
                 # Re-discover in case the target changed
                 self._ws_url = await self._discover_ws_url()
                 await self._connect_ws()
-                # Re-enable domains that were active
                 logger.info("cdp_client: reconnected successfully")
+                # Flag that domains need re-enabling.  The actual
+                # send() calls happen in _listen after _receive_loop
+                # resumes, because send() depends on the listener
+                # reading responses from the WebSocket.
+                self._needs_reenable = True
                 return
             except Exception as exc:
                 logger.debug("cdp_client: reconnect failed: %s", exc)

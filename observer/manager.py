@@ -53,9 +53,8 @@ class ObserverManager:
         await self._cdp.connect()
         self._started = True
 
-        # Start CDP listener FIRST — it reads responses from the WebSocket.
-        # Without it, send() calls hang because nobody reads the response.
-        self._tasks.append(asyncio.create_task(self._cdp._listen()))
+        # connect() now starts the background listener task internally,
+        # so we no longer need to create it here.
 
         await self._cdp.enable_domains("Page", "Network", "Runtime")
 

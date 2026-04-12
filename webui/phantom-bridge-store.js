@@ -192,6 +192,39 @@ export const store = createStore("phantomBridge", {
         }
     },
 
+    async replayPlaybook(name) {
+        try {
+            const { toastFrontendInfo, toastFrontendSuccess, toastFrontendError } = await import("/components/notifications/notification-store.js");
+            toastFrontendInfo(`Replaying '${name}'...`, "Phantom Bridge");
+            const result = await api("bridge", { action: "replay", name });
+            if (result.ok) {
+                toastFrontendSuccess(`Replay '${name}' started (${result.steps} steps)`, "Phantom Bridge");
+            } else {
+                toastFrontendError(`Replay failed: ${result.error}`, "Phantom Bridge");
+            }
+        } catch (e) {
+            const { toastFrontendError } = await import("/components/notifications/notification-store.js");
+            toastFrontendError("Replay failed: " + e.message, "Phantom Bridge");
+        }
+    },
+
+    async deletePlaybook(name) {
+        if (!confirm(`Delete playbook '${name}'?`)) return;
+        try {
+            const { toastFrontendSuccess, toastFrontendError } = await import("/components/notifications/notification-store.js");
+            const result = await api("bridge", { action: "delete_playbook", name });
+            if (result.ok) {
+                toastFrontendSuccess(`Deleted '${name}'`, "Phantom Bridge");
+                await this.fetchStatus();
+            } else {
+                toastFrontendError(`Delete failed: ${result.error}`, "Phantom Bridge");
+            }
+        } catch (e) {
+            const { toastFrontendError } = await import("/components/notifications/notification-store.js");
+            toastFrontendError("Delete failed: " + e.message, "Phantom Bridge");
+        }
+    },
+
     openBridge() {
         const host = location.hostname || "localhost";
         const url = `http://${host}:${this.novncPort}/vnc.html?autoconnect=true&resize=scale&reconnect=true`;

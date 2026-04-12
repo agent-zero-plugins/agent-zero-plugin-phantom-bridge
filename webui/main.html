@@ -179,9 +179,19 @@
                     <template x-if="$store.phantomBridge.playbookCount > 0">
                         <div>
                             <template x-for="pb in $store.phantomBridge.playbooks" :key="pb.name">
-                                <div class="pb-auth-item">
-                                    <span style="font-weight:600;" x-text="pb.name"></span>
-                                    <span class="pb-mono" style="opacity:0.4;" x-text="pb.domain + ' · ' + pb.steps + ' steps'"></span>
+                                <div style="display:flex; align-items:center; gap:8px; padding:6px 0; font-size:0.85em;">
+                                    <span style="font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;" x-text="pb.name"></span>
+                                    <span class="pb-mono" style="opacity:0.4; white-space:nowrap;" x-text="pb.steps + ' steps'"></span>
+                                    <button style="background:#6366f122; border:1px solid #6366f144; color:#a78bfa; font-size:0.75em; padding:3px 8px; border-radius:5px; cursor:pointer; white-space:nowrap;"
+                                            @click="$store.phantomBridge.replayPlaybook(pb.name)"
+                                            title="Replay this workflow">
+                                        ▶ Play
+                                    </button>
+                                    <button style="background:#ef444422; border:1px solid #ef444444; color:#ef4444; font-size:0.75em; padding:3px 8px; border-radius:5px; cursor:pointer;"
+                                            @click="$store.phantomBridge.deletePlaybook(pb.name)"
+                                            title="Delete this playbook">
+                                        ✕
+                                    </button>
                                 </div>
                             </template>
                         </div>

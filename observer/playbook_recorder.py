@@ -299,10 +299,8 @@ class PlaybookRecorder:
         self._current_domain = ""
         self._recording = True
 
-        # Enable CDP domains we need
-        await self._cdp.send("Page.enable")
-        await self._cdp.send("Network.enable")
-        await self._cdp.send("Runtime.enable")
+        # Ensure CDP domains are enabled (and tracked for reconnect)
+        await self._cdp.enable_domains("Page", "Network", "Runtime")
 
         # Register the __phantomBridge binding for DOM interaction capture
         try:
@@ -531,12 +529,23 @@ class PlaybookRecorder:
             logger.warning("playbook_recorder: failed to inject DOM hook: %s", exc)
 
     async def _on_page_load_reinject(self, params: dict[str, Any]) -> None:
-        """Re-inject the DOM hook after every page load.
+        """Re-register the CDP binding and re-inject the DOM hook after every
+        page load.
 
         Pages unload all scripts on navigation, so we must re-inject.
+        The __phantomBridge binding must also be re-added because
+        Chrome can drop it when the execution context is destroyed
+        during navigation.
         """
         if not self._recording:
             return
+        try:
+            await self._cdp.send(
+                "Runtime.addBinding", {"name": "__phantomBridge"}
+            )
+        except Exception:
+            # Binding may still exist — that's fine
+            pass
         await self._inject_dom_hook()
 
     async def _on_binding_called(self, params: dict[str, Any]) -> None:
