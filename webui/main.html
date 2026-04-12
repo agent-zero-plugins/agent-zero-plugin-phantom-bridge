@@ -45,6 +45,15 @@
         .pb-auth-status { font-size: 0.75em; opacity: 0.5; }
         .pb-section-title { font-size: 0.9em; font-weight: 600; margin-bottom: 8px; }
         .pb-empty { font-size: 0.8em; opacity: 0.4; font-style: italic; }
+
+        /* Health state banners */
+        .pb-banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.82em; line-height: 1.5; }
+        .pb-banner-warn  { background: #854d0e22; border: 1px solid #854d0e44; color: #fbbf24; }
+        .pb-banner-error { background: #7f1d1d22; border: 1px solid #7f1d1d44; color: #f87171; }
+        .pb-banner-healthy { display: none; }
+        .pb-banner-hint { margin-top: 6px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.9em; opacity: 0.85; white-space: pre-wrap; word-break: break-word; }
+        .pb-doctor-btn { margin-top: 8px; background: transparent; border: 1px solid currentColor; color: inherit; font-size: 0.8em; padding: 4px 10px; border-radius: 6px; cursor: pointer; opacity: 0.75; }
+        .pb-doctor-btn:hover { opacity: 1; }
     </style>
 </head>
 <body>
@@ -66,6 +75,21 @@
                         <span style="font-size:0.8em;" x-text="$store.phantomBridge.running ? 'Bridge Open' : 'Offline'"></span>
                     </div>
                 </div>
+
+                <!-- Health state banner — hidden when healthy -->
+                <template x-if="$store.phantomBridge.health_state !== 'healthy'">
+                    <div class="pb-banner" :class="$store.phantomBridge.statusBanner().cls">
+                        <strong x-text="$store.phantomBridge.statusBanner().text"></strong>
+                        <template x-if="$store.phantomBridge.statusBanner().hint">
+                            <div class="pb-banner-hint" x-text="$store.phantomBridge.statusBanner().hint"></div>
+                        </template>
+                        <button class="pb-doctor-btn"
+                                @click="$store.a0.sendMessage('Run bridge_doctor')"
+                                title="Ask A0 to run bridge_doctor for a full diagnostic">
+                            Run bridge_doctor
+                        </button>
+                    </div>
+                </template>
 
                 <!-- Open Bridge Button (when running) -->
                 <template x-if="$store.phantomBridge.running">

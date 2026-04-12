@@ -51,13 +51,28 @@ class BridgeHandler(ApiHandler):
             return {"ok": False, "error": f"Unknown action: {action}"}
 
     def _status(self) -> dict:
-        from usr.plugins.phantom_bridge.bridge import get_bridge
+        from usr.plugins.phantom_bridge.bridge import get_bridge, probe_novnc, HealthState
 
         bridge = get_bridge()
         if bridge and bridge.is_running():
             status = bridge.status()
-            return {"ok": True, "running": True, **status}
-        return {"ok": True, "running": False}
+            # Add live noVNC health state for state-aware WebUI
+            novnc_port = status.get("novnc_port", 6080)
+            try:
+                probe = probe_novnc(host="localhost", port=novnc_port, timeout=2.0)
+                health_state = probe["state"].value
+                health_fix = probe["fix"]
+            except Exception:
+                health_state = HealthState.NOVNC_UNREACHABLE.value
+                health_fix = "probe_novnc raised an unexpected error — run bridge_doctor for details."
+            return {
+                "ok": True,
+                "running": True,
+                "health_state": health_state,
+                "health_fix": health_fix,
+                **status,
+            }
+        return {"ok": True, "running": False, "health_state": HealthState.BRIDGE_DOWN.value, "health_fix": "Run bridge_open to start the bridge."}
 
     async def _start(self, input: dict) -> dict:
         from usr.plugins.phantom_bridge.bridge import (

@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.2.1-purple.svg" alt="Version 1.2.1"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.3.0-purple.svg" alt="Version 1.3.0"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,14 @@
 
 ---
 
-## What's New in v1.2.1
+## What's New in v1.3.0
+
+- **Diagnostics & pre-flight** — `bridge_doctor` tool runs 5 health checks (noVNC port, system binaries, DISPLAY env, cookie key, Python deps) and prints copy-paste fix commands for every failure.
+- **Pre-flight in `bridge_open`** — After the bridge starts, `probe_novnc` checks the noVNC endpoint and prepends an actionable hint to the response if the viewer is unreachable — no more silent blank screens.
+- **State-aware WebUI** — The sidebar panel shows an amber/red banner with the exact fix hint when `health_state != healthy`.
+- **Verified `execute.py`** — After `apt-get install`, the installer now re-checks that `x11vnc` and `websockify` actually landed on PATH and exits 1 with a clear error if they didn't.
+
+### v1.2.1
 
 - **Centralized data path resolution** — All persistent data paths (cookies, playbooks, sitemaps, auth registry, profile) now resolve through a single `data_paths.py` module. Supports `PHANTOM_BRIDGE_DATA_DIR` environment variable to relocate the entire data tree (e.g., to a mounted volume).
 
@@ -368,6 +375,38 @@ phantom_bridge/
 │   ├── prompts/           # Tool usage examples for A0
 │   └── webui/             # Chat bar button + modal injection
 └── webui/                 # Alpine.js sidebar panel + bridge viewer
+```
+
+---
+
+## Troubleshooting
+
+### Blank viewer / noVNC not loading
+
+Run the diagnostic tool from inside the container:
+
+```bash
+docker exec -it a0 python /a0/usr/plugins/phantom_bridge/tools/bridge_doctor.py
+```
+
+Or ask A0 directly: *"Run bridge_doctor"*
+
+`bridge_doctor` checks 5 things and prints a copy-paste fix for each failure:
+
+| Check | What it detects | Fix |
+|-------|----------------|-----|
+| **noVNC port** | Port 6080 not mapped in compose | Add `"6080:6080"` to `ports:`, then `docker compose up -d` |
+| **System binaries** | `x11vnc`, `websockify`, `Xvfb`, etc. missing | `apt-get install -y x11vnc novnc xvfb xdotool chromium` |
+| **DISPLAY env** | Xvfb not running | Check `ps aux \| grep Xvfb`; run `bridge_open` to restart |
+| **Cookie key** | `data/.cookie_key` unreadable | `chmod 600 data/.cookie_key` |
+| **Python deps** | `websockets` or `cryptography` not installed | `pip install -r requirements.txt` |
+
+### Quick exit codes (for scripting)
+
+```bash
+# exit 0 = healthy, exit 1 = something is wrong
+docker exec a0 python /a0/usr/plugins/phantom_bridge/tools/bridge_doctor.py --quiet
+echo "bridge health: $?"
 ```
 
 ---

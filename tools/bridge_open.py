@@ -55,19 +55,44 @@ class BrowserBridgeOpen(Tool):
 
         novnc_url = status.get("novnc_url", "")
         novnc_running = status.get("novnc_running", False)
+        novnc_port = status.get("novnc_port", 6080)
 
-        if novnc_running:
+        # Pre-flight probe — advisory only, never blocks startup
+        preflight_hint = ""
+        try:
+            from usr.plugins.phantom_bridge.bridge import probe_novnc, HealthState
+            probe = probe_novnc(host="localhost", port=novnc_port, timeout=2.0)
+            if probe["state"] != HealthState.HEALTHY:
+                preflight_hint = (
+                    f"\n[WARNING] noVNC health check: {probe['state'].value}\n"
+                    f"Detail: {probe['detail']}\n"
+                    f"Fix: {probe['fix']}\n"
+                    f"Run bridge_doctor for a full diagnostic report.\n"
+                )
+        except Exception:
+            pass  # probe failure must never break bridge_open
+
+        if novnc_running and not preflight_hint:
             viewer_msg = (
                 f"Remote browser viewer: {novnc_url}\n"
                 f"Or use the Phantom Bridge panel in A0's sidebar.\n\n"
                 f"The user can control the container's browser directly — "
                 f"full keyboard, mouse, and clipboard support.\n"
             )
+        elif novnc_running and preflight_hint:
+            viewer_msg = (
+                f"Remote browser viewer: {novnc_url}\n"
+                f"Or use the Phantom Bridge panel in A0's sidebar.\n\n"
+                f"The user can control the container's browser directly — "
+                f"full keyboard, mouse, and clipboard support.\n"
+                f"{preflight_hint}"
+            )
         else:
             viewer_msg = (
                 f"noVNC is not running (dependencies may not be installed).\n"
                 f"The user can still connect via Chrome DevTools at "
                 f"http://localhost:{status.get('port', 9222)}\n"
+                f"{preflight_hint}"
             )
 
         return Response(

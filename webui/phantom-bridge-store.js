@@ -10,6 +10,8 @@ export const store = createStore("phantomBridge", {
     novncUrl: "",
     novncReady: false,
     novncPort: 6080,
+    health_state: "healthy",
+    health_fix: "",
     authEntries: [],
     authCount: 0,
     cookieDomains: [],
@@ -86,6 +88,29 @@ export const store = createStore("phantomBridge", {
         await this.fetchStatus();
     },
 
+    // Returns { cls, text, hint } for the state banner.
+    // cls is a CSS class name defined in main.html.
+    statusBanner() {
+        const state = this.health_state || "healthy";
+        const hint = this.health_fix || "";
+        if (state === "healthy") {
+            return { cls: "pb-banner-healthy", text: "noVNC healthy", hint: "" };
+        }
+        if (state === "bridge_down") {
+            return { cls: "pb-banner-warn", text: "Bridge offline", hint: hint || "Run bridge_open to start the bridge." };
+        }
+        if (state === "port_unmapped") {
+            return { cls: "pb-banner-error", text: "Port not mapped", hint: hint || "Add 6080:6080 to your docker-compose.yml ports and restart." };
+        }
+        if (state === "novnc_unreachable") {
+            return { cls: "pb-banner-error", text: "noVNC unreachable", hint: hint || "Run bridge_doctor for a fix command." };
+        }
+        if (state === "deps_missing") {
+            return { cls: "pb-banner-error", text: "Dependencies missing", hint: hint || "Run bridge_doctor to see which packages need installing." };
+        }
+        return { cls: "pb-banner-warn", text: `Health: ${state}`, hint };
+    },
+
     async fetchStatus() {
         try {
             const status = await api("bridge", { action: "status" });
@@ -93,6 +118,8 @@ export const store = createStore("phantomBridge", {
             this.novncReady = status.novnc_running || false;
             this.novncUrl = status.novnc_url || "";
             this.novncPort = status.novnc_port || 6080;
+            this.health_state = status.health_state || (this.running ? "healthy" : "bridge_down");
+            this.health_fix = status.health_fix || "";
 
             // Cookie domains — read from encrypted on-disk files; no CDP roundtrip.
             const cookieData = await api("bridge", { action: "cookies" });
