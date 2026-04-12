@@ -1,27 +1,20 @@
 # Phantom Bridge — Docker image build and publish to ghcr.io
 #
-# Triggers:
-#   - Push a version tag (v*) to publish a release image
-#   - Push to main to publish a rolling :latest
-#   - Pull requests to validate the build without pushing
+# DISABLED in v1.4.3. The prebuilt-image install path was reverted in
+# favor of the canonical A0 plugin pattern (clone into usr/plugins/,
+# click Execute in the Plugin List UI). The old Dockerfile was built
+# FROM frdel/agent-zero-run:latest, which is an outdated base — A0
+# moved to agent0ai/agent-zero-base:latest. Rather than chase the
+# moving target, this workflow only runs on manual dispatch from the
+# Actions tab. The Dockerfile + entrypoint stay in the repo for
+# anyone who wants to fork and resurrect the prebuilt-image flow.
 #
-# Published images:
-#   ghcr.io/notabotchef/phantom-bridge:latest
-#   ghcr.io/notabotchef/phantom-bridge:<tag>   (on v* tag push)
-#
-# Multi-arch: amd64 + arm64 for Apple Silicon (M1/M2/M3) users.
+# To re-enable: add `push:` and `pull_request:` triggers back below.
 
 name: Build and Publish Docker Image
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io

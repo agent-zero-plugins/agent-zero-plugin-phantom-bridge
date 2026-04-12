@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.4.2-purple.svg" alt="Version 1.4.2"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.4.3-purple.svg" alt="Version 1.4.3"></a>
 </p>
 
 <p align="center">
@@ -20,9 +20,13 @@
 
 ---
 
-## What's New in v1.4.2
+## What's New in v1.4.3
 
-- **Dockerfile fix** — `pip` is not on PATH in the `frdel/agent-zero-run` base image, so the v1.4.0/v1.4.1 GitHub Actions image build failed at the Python deps step. Switched to `python3 -m pip install --break-system-packages` (PEP 668-compatible) and added a defensive install into `/opt/venv/bin/pip` if A0 ships a venv. Multi-arch ghcr publish now succeeds.
+- **Reverts to the canonical Agent Zero plugin install pattern.** v1.4.0–v1.4.2 tried to ship a prebuilt Docker image (`ghcr.io/notabotchef/phantom-bridge`) but the image was built FROM `frdel/agent-zero-run:latest`, an outdated base — the current A0 base is `agent0ai/agent-zero-base:latest`. The build pipeline never produced a working image; users following v1.4.0/v1.4.1/v1.4.2 instructions hit `pull access denied` or a stale image.
+- **New Quick Start (3 commands)** — clones the plugin into `./a0-data/usr/plugins/phantom_bridge`, drops in the compose override (port 6080 + plugin volume mount), and restarts. Then click **Execute** on the Phantom Bridge entry in A0's Plugins UI to run `execute.py`. This is the standard A0 plugin install path that has worked for the entire 1.x line.
+- **`execute.py` hardened** — auto-bootstraps `python3-pip` via `apt` if the base image doesn't ship it, uses `--break-system-packages` (PEP 668), and `--ignore-installed` so pip doesn't fight with apt-managed packages like `python3-cryptography`. Also checks `cryptography` import in addition to `websockets`.
+- **`docker-compose.override.yml` no longer references the broken image.** It now only adds the noVNC port and the plugin volume mount — your existing A0 image stays in use.
+- **Heads up:** if you tried installing v1.4.0, v1.4.1, or v1.4.2, you got a broken stack. Pull the latest `docker-compose.override.yml` and re-run the new Quick Start.
 
 ### v1.4.1
 
@@ -188,21 +192,25 @@ The `_30_browser_bridge_profile.py` extension runs at `message_loop_start` and p
 
 The fastest path: one file download, one command, done. No apt, no pip, no execute.py.
 
+Phantom Bridge installs the same way every other Agent Zero plugin does: drop the code into `usr/plugins/`, expose port 6080, click **Execute** in A0's Plugins UI.
+
 ```bash
-# 1. Download the drop-in compose override
+# 1. Clone the plugin into your A0 plugins directory
+git clone https://github.com/notabotchef/phantom-bridge.git \
+    ./a0-data/usr/plugins/phantom_bridge
+
+# 2. Drop in the compose override (adds port 6080 + plugin volume mount)
 curl -O https://raw.githubusercontent.com/notabotchef/phantom-bridge/main/docker-compose.override.yml
 
-# 2. Start (or restart) your A0 stack — Compose auto-merges the override
+# 3. (Re)start your A0 stack — Compose auto-merges the override
 docker compose up -d
-
-# 3. Open A0 in your browser
-open http://localhost:5050   # then click the Phantom Bridge icon in the sidebar
 ```
 
-The prebuilt image (`ghcr.io/notabotchef/phantom-bridge:latest`) has all system dependencies pre-installed.
-If you already have A0 running with a `git clone` of this plugin, the smart entrypoint detects your mounted directory and skips the baked copy — your `git pull` workflow is preserved.
+Then open A0 at <http://localhost:5050>, go to **Plugins**, find **Phantom Bridge**, and click **Execute**. That runs `execute.py` inside the container, which installs `x11vnc`, `novnc`, `xvfb`, `xdotool`, `chromium` and the Python deps. After it finishes, click the Phantom Bridge icon in the sidebar to open the remote browser viewer.
 
 > **Different noVNC port?** Set `PHANTOM_NOVNC_PORT=6081` in your `.env` file before running `docker compose up -d`.
+
+> **Updating?** `git pull` inside `./a0-data/usr/plugins/phantom_bridge` and restart A0. The volume mount means new code is picked up immediately.
 
 ---
 
