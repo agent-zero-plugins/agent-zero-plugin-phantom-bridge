@@ -10,7 +10,7 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License"></a>
   <a href="https://github.com/frdel/agent-zero"><img src="https://img.shields.io/badge/Agent_Zero-plugin-orange.svg" alt="A0 Compatible"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-1.4.1-purple.svg" alt="Version 1.4.1"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-1.4.2-purple.svg" alt="Version 1.4.2"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,11 @@
 
 ---
 
-## What's New in v1.4.1
+## What's New in v1.4.2
+
+- **Dockerfile fix** — `pip` is not on PATH in the `frdel/agent-zero-run` base image, so the v1.4.0/v1.4.1 GitHub Actions image build failed at the Python deps step. Switched to `python3 -m pip install --break-system-packages` (PEP 668-compatible) and added a defensive install into `/opt/venv/bin/pip` if A0 ships a venv. Multi-arch ghcr publish now succeeds.
+
+### v1.4.1
 
 - **One-liner installer** — `install.sh` with security warning, 5-second countdown, SHA256 verification, A0 dir auto-detection, Docker and manual modes, post-install `bridge_doctor` check. Shellcheck clean.
 - **Release workflow** — `.github/workflows/release.yml` publishes install.sh SHA256 to GitHub Release notes so users can verify before running.

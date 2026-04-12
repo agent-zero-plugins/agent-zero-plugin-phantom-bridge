@@ -28,11 +28,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ---------------------------------------------------------------------------
 # Python runtime dependencies
+# Use `python3 -m pip` (not bare `pip`) — frdel/agent-zero-run does not
+# expose `pip` on PATH. `--break-system-packages` is required on Debian
+# Bookworm+ (PEP 668). If A0 ships a venv at /opt/venv, install there too
+# so the agent runtime sees the same packages.
 # ---------------------------------------------------------------------------
-RUN pip install --no-cache-dir \
-    "websockets>=13.1,<17.0" \
-    "cryptography>=42.0,<45.0" \
-    pyyaml
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+        "websockets>=13.1,<17.0" \
+        "cryptography>=42.0,<45.0" \
+        pyyaml \
+    && if [ -x /opt/venv/bin/pip ]; then \
+        /opt/venv/bin/pip install --no-cache-dir \
+            "websockets>=13.1,<17.0" \
+            "cryptography>=42.0,<45.0" \
+            pyyaml; \
+    fi
 
 # ---------------------------------------------------------------------------
 # Bake plugin into image — smart entrypoint will only use this copy when
