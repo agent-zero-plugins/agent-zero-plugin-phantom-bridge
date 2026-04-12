@@ -40,6 +40,8 @@ class BridgeHandler(ApiHandler):
             return await self._record_start(input)
         elif action == "record_stop":
             return await self._record_stop()
+        elif action == "replay":
+            return await self._replay(input)
         elif action == "cookies":
             return self._get_cookies()
         elif action == "export_cookies":
@@ -375,3 +377,83 @@ class BridgeHandler(ApiHandler):
             }
         except RuntimeError as e:
             return {"ok": False, "error": str(e)}
+
+    async def _replay(self, input: dict) -> dict:
+        """Trigger playbook replay via the bridge's Playwright executor."""
+        import asyncio
+        from pathlib import Path
+        from usr.plugins.phantom_bridge.bridge import get_bridge
+
+        name = input.get("name", "")
+        if not name:
+            return {"ok": False, "error": "Missing 'name'"}
+
+        bridge = get_bridge()
+        if not bridge or not bridge.is_running():
+            return {"ok": False, "error": "Bridge not running"}
+
+        om = getattr(bridge, "_observer_manager", None)
+        recorder = getattr(om, "_playbook", None) if om else None
+        if not recorder:
+            return {"ok": False, "error": "Recorder unavailable"}
+
+        playbook = recorder.get_playbook(name)
+        if playbook is None:
+            return {"ok": False, "error": f"No playbook found: {name}"}
+
+        profile_dir = str(bridge.get_profile_dir())
+
+        # Run replay in background so the API returns immediately
+        async def _run_replay():
+            try:
+                from playwright.async_api import async_playwright
+
+                async with async_playwright() as pw:
+                    profile_path = Path(profile_dir)
+                    profile_path.mkdir(parents=True, exist_ok=True)
+                    context = await pw.chromium.launch_persistent_context(
+                        str(profile_path),
+                        headless=True,
+                        viewport={"width": 1280, "height": 900},
+                    )
+                    page = (
+                        context.pages[0]
+                        if context.pages
+                        else await context.new_page()
+                    )
+
+                    for step in playbook.steps:
+                        wait_s = min((step.wait_ms or 500) / 1000, 5.0)
+                        try:
+                            if step.action == "navigate" and step.url:
+                                await page.goto(
+                                    step.url,
+                                    wait_until="networkidle",
+                                    timeout=30000,
+                                )
+                            elif step.action in ("click", "submit") and step.selector:
+                                await page.click(step.selector, timeout=10000)
+                            elif step.action == "type" and step.selector:
+                                await page.fill(
+                                    step.selector, step.value or "", timeout=10000
+                                )
+                            elif step.action == "select" and step.selector:
+                                await page.select_option(
+                                    step.selector, step.value or "", timeout=10000
+                                )
+                        except Exception:
+                            pass
+                        await asyncio.sleep(wait_s)
+
+                    await context.close()
+            except Exception:
+                pass
+
+        asyncio.create_task(_run_replay())
+
+        return {
+            "ok": True,
+            "name": playbook.name,
+            "steps": len(playbook.steps),
+            "status": "started",
+        }
