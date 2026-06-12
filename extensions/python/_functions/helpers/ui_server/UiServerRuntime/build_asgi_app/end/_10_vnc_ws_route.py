@@ -65,6 +65,17 @@ class _VncProxyASGI:
         if msg.get("type") != "websocket.connect":
             return
 
+        # Accept the browser side FIRST so that any later failure results in a
+        # clean WebSocket close (with a status code) rather than a pre-accept
+        # rejection, which browsers surface as an opaque 1006 abnormal closure.
+        # noVNC speaks the "binary" subprotocol (as does websockify); echo it if
+        # the client offered it.
+        offered = scope.get("subprotocols") or []
+        accept: dict = {"type": "websocket.accept"}
+        if "binary" in offered:
+            accept["subprotocol"] = "binary"
+        await send(accept)
+
         upstream_url = f"ws://localhost:{_novnc_port()}/websockify"
         try:
             upstream = await websockets.connect(
@@ -76,16 +87,13 @@ class _VncProxyASGI:
             )
         except Exception as e:
             logger.warning("phantom_bridge: vnc_proxy upstream connect failed: %s", e)
-            # 1011 = internal error / upstream unavailable
-            await send({"type": "websocket.close", "code": 1011})
+            # Already accepted -> close cleanly so the client sees a real code
+            # (1011 = internal error / upstream unavailable) instead of 1006.
+            try:
+                await send({"type": "websocket.close", "code": 1011})
+            except Exception:
+                pass
             return
-
-        # Accept the browser side, echoing the negotiated subprotocol if any.
-        accept: dict = {"type": "websocket.accept"}
-        sub = getattr(upstream, "subprotocol", None)
-        if sub:
-            accept["subprotocol"] = sub
-        await send(accept)
 
         async def client_to_upstream():
             while True:
