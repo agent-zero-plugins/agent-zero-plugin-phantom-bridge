@@ -400,9 +400,10 @@ class BrowserBridge:
         if running and self._started_at:
             info["uptime_seconds"] = int(time.time() - self._started_at)
             info["connect_url"] = f"http://localhost:{self.remote_debug_port}"
-            info["novnc_url"] = (
-                f"http://localhost:{self.novnc_port}/vnc.html?autoconnect=true&resize=scale"
-            )
+            # Same-origin relative path — the frontend prefixes wss://<host>.
+            # The VNC stream is relayed through A0's HTTPS origin via /vnc_proxy
+            # (see extensions/.../build_asgi_app), avoiding mixed-content blocks.
+            info["novnc_url"] = "/vnc_proxy"
             info["novnc_port"] = self.novnc_port
             info["novnc_running"] = (
                 self._vnc_process is not None and self._vnc_process.poll() is None

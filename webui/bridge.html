@@ -146,9 +146,9 @@
             </div>
         </div>
 
-        <!-- noVNC mode -->
+        <!-- noVNC mode — RFB client over same-origin wss:///vnc_proxy -->
         <template x-if="mode === 'vnc'">
-            <iframe class="vnc-frame" :src="vncUrl" allow="clipboard-read; clipboard-write"></iframe>
+            <div class="vnc-frame" x-ref="vncTarget"></div>
         </template>
 
         <!-- Screencast mode -->
@@ -174,7 +174,7 @@
         <template x-if="mode === 'screencast'">
             <div class="upgrade-bar">
                 Screencast mode (works out of the box).
-                For full native control, add <code>"6080:6080"</code> to docker-compose and restart.
+                For full native control, install noVNC (<code>x11vnc</code> + <code>novnc</code>) so the bridge can serve the same-origin VNC stream.
             </div>
         </template>
 
@@ -243,18 +243,15 @@
                     // Fetch playbooks
                     this.fetchPlaybooks();
 
-                    // Step 2: Try noVNC first (requires port 6080 exposed)
-                    const novncPort = status.novnc_port || 6080;
-                    const vncTestUrl = `http://${location.hostname}:${novncPort}/vnc.html`;
+                    // Step 2: noVNC RFB over SAME-ORIGIN wss:// (relayed by /vnc_proxy).
+                    // No mixed content, no exposed port 6080.
                     try {
-                        await fetch(vncTestUrl, { mode: 'no-cors', signal: AbortSignal.timeout(2000) });
-                        // noVNC is reachable
+                        await this._connectVnc();
                         this.mode = 'vnc';
-                        this.vncUrl = vncTestUrl + '?autoconnect=true&resize=scale&reconnect=true';
                         this.connected = true;
                         return;
                     } catch (e) {
-                        // noVNC not reachable — use screencast
+                        this._disconnectVnc();
                     }
 
                     // Step 3: Fall back to screencast (zero config)
@@ -262,6 +259,42 @@
                     this.connected = true;
                     await this.$nextTick;
                     this.startScreencastLoop();
+                },
+
+                async _loadRFB() {
+                    const urls = [
+                        "https://esm.sh/@novnc/novnc@1.7.0/core/rfb.js",
+                        "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.7.0/+esm"
+                    ];
+                    let lastErr = null;
+                    for (const u of urls) {
+                        try { const m = await import(u); return m.default || m.RFB || m; }
+                        catch (e) { lastErr = e; }
+                    }
+                    throw lastErr || new Error("noVNC RFB failed to load");
+                },
+
+                async _connectVnc() {
+                    const RFB = await this._loadRFB();
+                    // Render the mount target first (x-if depends on mode)
+                    this.mode = 'vnc';
+                    await this.$nextTick();
+                    const target = this.$refs.vncTarget;
+                    if (!target) throw new Error("vnc target missing");
+                    const proto = (location.protocol === 'https:') ? 'wss' : 'ws';
+                    const wsUrl = `${proto}://${location.host}/vnc_proxy`;
+                    this._rfb = new RFB(target, wsUrl, {});
+                    this._rfb.scaleViewport = true;
+                    this._rfb.resizeSession = false;
+                    await new Promise((resolve, reject) => {
+                        const to = setTimeout(() => reject(new Error("vnc connect timeout")), 8000);
+                        this._rfb.addEventListener("connect", () => { clearTimeout(to); resolve(); });
+                        this._rfb.addEventListener("disconnect", () => { clearTimeout(to); reject(new Error("vnc disconnected")); });
+                    });
+                },
+
+                _disconnectVnc() {
+                    if (this._rfb) { try { this._rfb.disconnect(); } catch (e) {} this._rfb = null; }
                 },
 
                 startScreencastLoop() {
