@@ -226,8 +226,8 @@ export const store = createStore("phantomBridge", {
     },
 
     openBridge() {
-        const host = location.hostname || "localhost";
-        const url = `http://${host}:${this.novncPort}/vnc.html?autoconnect=true&resize=scale&reconnect=true`;
+        // Same-origin standalone viewer (RFB over wss:///vnc_proxy) — no mixed content.
+        const url = `${location.origin}/plugins/phantom_bridge/webui/bridge.html`;
         window.open(url, "phantom-bridge");
     },
 });

@@ -39,8 +39,8 @@
       <span>Connecting to bridge...</span>
     </div>
 
-    <!-- noVNC iframe (primary) -->
-    <iframe id="pb-vnc-frame" style="display:none;" allow="clipboard-read; clipboard-write"></iframe>
+    <!-- noVNC RFB mount target (primary) — same-origin wss via /vnc_proxy -->
+    <div id="pb-vnc-frame" style="display:none;"></div>
 
     <!-- Screencast canvas (fallback) -->
     <div id="pb-sc-container" style="display:none;" tabindex="0">
@@ -211,6 +211,7 @@
     modal.style.display = "none";
     globalThis._phantomBridgeModalVisible = false;
     stopScreencast();
+    _disconnectVnc();
   }
 
   function minimize() {
@@ -262,34 +263,73 @@
   });
 
   // ── Connect viewer ──
+  // noVNC RFB client (lazy-loaded from CDN, bundled build)
+  var rfb = null;
+  async function _loadRFB() {
+    var urls = [
+      "https://esm.sh/@novnc/novnc@1.7.0/core/rfb.js",
+      "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.7.0/+esm"
+    ];
+    var lastErr = null;
+    for (var i = 0; i < urls.length; i++) {
+      try { var m = await import(urls[i]); return m.default || m.RFB || m; }
+      catch(e) { lastErr = e; }
+    }
+    throw lastErr || new Error("noVNC RFB failed to load");
+  }
+
+  function _disconnectVnc() {
+    if (rfb) { try { rfb.disconnect(); } catch(e) {} rfb = null; }
+    if (vncFrame) vncFrame.innerHTML = "";
+  }
+
   async function connectViewer() {
     loadingEl.style.display = "flex";
     vncFrame.style.display = "none";
     scContainer.style.display = "none";
+    _disconnectVnc();
+    stopScreencast();
 
-    // Get bridge status for noVNC port
+    // Get bridge status (confirms bridge + websockify are up)
+    var novncRunning = false;
     try {
       var status = await api("bridge", { action: "status" });
       novncPort = status.novnc_port || 6080;
+      novncRunning = !!status.novnc_running;
     } catch(e) {}
 
-    // Try noVNC
-    var vncUrl = "http://" + location.hostname + ":" + novncPort + "/vnc.html";
+    // Primary: noVNC RFB over SAME-ORIGIN wss:// — relayed by the plugin's
+    // /vnc_proxy ASGI route to internal websockify (no mixed content, no extra port).
     try {
-      await fetch(vncUrl, { mode: "no-cors", signal: AbortSignal.timeout(2000) });
-      // noVNC reachable
+      var RFB = await _loadRFB();
+      var proto = (location.protocol === "https:") ? "wss" : "ws";
+      var wsUrl = proto + "://" + location.host + "/vnc_proxy";
+      vncFrame.style.display = "block";
+      rfb = new RFB(vncFrame, wsUrl, {});
+      rfb.viewOnly = false;
+      rfb.scaleViewport = true;
+      rfb.resizeSession = false;
+      var settled = false;
+      await new Promise(function(resolve, reject) {
+        var to = setTimeout(function(){ if(!settled){ settled=true; reject(new Error("vnc connect timeout")); } }, 8000);
+        rfb.addEventListener("connect", function(){ if(!settled){ settled=true; clearTimeout(to); resolve(); } });
+        rfb.addEventListener("disconnect", function(ev){
+          if(!settled){ settled=true; clearTimeout(to); reject(new Error("vnc disconnected")); }
+        });
+      });
       mode = "vnc";
       modeTag.textContent = "noVNC";
       modeTag.style.background = "";
       modeTag.style.color = "";
-      vncFrame.src = vncUrl + "?autoconnect=true&resize=scale&reconnect=true&reconnect_delay=1000";
-      vncFrame.style.display = "block";
       loadingEl.style.display = "none";
       showRecordButtons();
       return;
-    } catch(e) {}
+    } catch(e) {
+      _disconnectVnc();
+      vncFrame.style.display = "none";
+    }
 
-    // Fallback: screencast
+    // Fallback: screencast (CDP JPEG poll over the same-origin API)
     mode = "screencast";
     modeTag.textContent = "Screencast";
     modeTag.style.background = "";
@@ -355,7 +395,8 @@
   // ── Popout ──
   btnPopout.addEventListener("click", function(e) {
     e.stopPropagation();
-    var url = "http://" + location.hostname + ":" + novncPort + "/vnc.html?autoconnect=true&resize=scale&reconnect=true";
+    // Same-origin standalone viewer (served by the plugin) — avoids mixed content.
+    var url = location.origin + "/plugins/phantom_bridge/webui/bridge.html";
     window.open(url, "phantom-bridge");
   });
 
