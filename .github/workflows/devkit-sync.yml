@@ -1,0 +1,33 @@
+# devkit-sync — caller template (SPEC DEC-044).
+#
+# Copied into a consumer plugin repo at .github/workflows/devkit-sync.yml by
+# `make link-workflows`. Keeps the repo's vendored devkit submodule
+# (tests/_testkit) current by bumping it to the devkit's latest main nightly.
+#
+# Required REPO-level secrets (the shared sync GitHub App; already present on
+# repos that previously used skills-sync — same App):
+#   SKILLS_SYNC_APP_CLIENT_ID    — App OAuth Client ID (Iv23li…)
+#   SKILLS_SYNC_APP_PRIVATE_KEY  — App private-key PEM
+# The App must be installed (Contents:Read) on the devkit repo. It does NOT
+# need to be installed on this consumer — GITHUB_TOKEN covers the local push/PR.
+#
+# DO NOT add pull_request: triggers — fork-PR is the secret-exfiltration vector.
+name: devkit-sync
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # nightly 04:00 UTC (offset from skills-sync's 03:00)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    uses: agent-zero-plugins/agent-zero-plugin-development-testkit/.github/workflows/devkit-sync.yml@main
+    with:
+      devkit-submodule-path: "tests/_testkit"
+    secrets:
+      SKILLS_SYNC_APP_CLIENT_ID: ${{ secrets.SKILLS_SYNC_APP_CLIENT_ID }}
+      SKILLS_SYNC_APP_PRIVATE_KEY: ${{ secrets.SKILLS_SYNC_APP_PRIVATE_KEY }}

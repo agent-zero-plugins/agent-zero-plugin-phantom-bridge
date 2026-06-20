@@ -1,0 +1,24 @@
+# plugin-e2e — caller template (SPEC DEC-020/044).
+#
+# Copied into a consumer plugin repo at .github/workflows/plugin-e2e.yml by
+# `make link-workflows`. Runs the full install → verify-installed → uninstall →
+# verify-uninstalled lifecycle (A0 booted nested + rootless) on every PR.
+#
+# Parameter-free: the reusable workflow resolves the plugin from the repo
+# (.devkit.yml `plugin_dir` → else canonical usr/plugins/<name>), so this
+# template is identical across all repos.
+#
+# Needs the shared sync-App secrets to clone the private devkit submodule.
+name: plugin-e2e
+
+on:
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    uses: agent-zero-plugins/agent-zero-plugin-development-testkit/.github/workflows/plugin-e2e.yml@main
+    secrets:
+      SKILLS_SYNC_APP_CLIENT_ID: ${{ secrets.SKILLS_SYNC_APP_CLIENT_ID }}
+      SKILLS_SYNC_APP_PRIVATE_KEY: ${{ secrets.SKILLS_SYNC_APP_PRIVATE_KEY }}

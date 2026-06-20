@@ -1,0 +1,3 @@
+[submodule "tests/_testkit"]
+	path = tests/_testkit
+	url = https://github.com/agent-zero-plugins/agent-zero-plugin-development-testkit.git
